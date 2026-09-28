@@ -1,0 +1,27 @@
+{
+  "name": "mediapipe",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -k \"npm run dev:web\" \"npm run dev:server\"",
+    "dev:web": "vite",
+    "dev:server": "tsx watch server/server.ts",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.server.json && vite build",
+    "preview": "vite preview",
+    "test:osc": "tsx server/oscReceiver.ts"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.2",
+    "@types/ws": "^8.18.1",
+    "concurrently": "^10.0.5",
+    "tsx": "^4.23.15",
+    "typescript": "~6.0.2",
+    "vite": "^8.3.0"
+  },
+  "dependencies": {
+    "@mediapipe/tasks-vision": "^1.0.1",
+    "osc": "^2.4.5",
+    "ws": "^8.21.3"
+  }
+}
