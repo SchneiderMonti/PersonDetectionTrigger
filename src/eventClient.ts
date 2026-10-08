@@ -4,8 +4,13 @@ export type BackendConnectionStatus = 'connected' | 'disconnected'
 
 type StatusListener = (status: BackendConnectionStatus) => void
 
-const BACKEND_URL = 'ws://localhost:8080'
 const RECONNECT_DELAY_MS = 2000
+
+function getBackendUrl() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+
+  return `${protocol}//${window.location.host}/ws`
+}
 
 export class EventClient {
   private socket: WebSocket | null = null
@@ -43,7 +48,7 @@ export class EventClient {
     this.clearReconnectTimer()
 
     try {
-      this.socket = new WebSocket(BACKEND_URL)
+      this.socket = new WebSocket(getBackendUrl())
     } catch (error) {
       console.warn('Could not create backend WebSocket:', error)
       this.setStatus('disconnected')

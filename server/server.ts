@@ -2,6 +2,7 @@ import { WebSocketServer } from 'ws'
 import { OscSender, type PresenceEvent, type StationPresenceEvent } from './oscSender.js'
 
 const PORT = 8080
+const HOST = '127.0.0.1'
 const VALID_EVENT_TYPES = new Set<string>(['PERSON_ENTER', 'PERSON_LEAVE'])
 const oscSender = new OscSender()
 
@@ -20,7 +21,7 @@ function isStationPresenceEvent(message: unknown): message is StationPresenceEve
   return isNonEmptyString(candidate.stationId) && isPresenceEvent(candidate.type)
 }
 
-const server = new WebSocketServer({ port: PORT, host: 'localhost' })
+const server = new WebSocketServer({ port: PORT, host: HOST })
 
 server.on('connection', (socket) => {
   console.log('[WS] client connected')
@@ -47,7 +48,7 @@ server.on('connection', (socket) => {
 })
 
 server.on('listening', () => {
-  console.log(`[WS] listening on ws://localhost:${PORT}`)
+  console.log(`[WS] listening on ws://${HOST}:${PORT}`)
 })
 
 server.on('error', (error) => {

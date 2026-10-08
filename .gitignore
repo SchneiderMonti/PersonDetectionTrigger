@@ -9,6 +9,10 @@ dist/
 .env.local
 .env.*.local
 
+# Local development certificates
+certs/
+.caddy/
+
 # macOS
 .DS_Store
 
