@@ -5,7 +5,7 @@ import { PersonPresence, type PresenceEvent } from './personPresence'
 import { getStationId, getVideoFilename, saveStationId, saveVideoFilename } from './stationConfig'
 
 const availableVideos = ['video01.mp4', 'video02.mp4', 'video03.mp4', 'video04.mp4']
-const PRESENCE_STATE_INTERVAL_MS = 1000
+const PRESENCE_SIGNAL_INTERVAL_MS = 1000
 
 let activePersonDetectionCleanup: (() => void) | null = null
 
@@ -120,7 +120,7 @@ async function startPersonDetection(
 
   const eventClient = new EventClient(() => getStationId()!, () => undefined)
   let animationFrameId: number | null = null
-  let presenceStateIntervalId: number | null = null
+  let presenceSignalIntervalId: number | null = null
   let stopped = false
 
   const cleanup = () => {
@@ -133,9 +133,9 @@ async function startPersonDetection(
       animationFrameId = null
     }
 
-    if (presenceStateIntervalId !== null) {
-      window.clearInterval(presenceStateIntervalId)
-      presenceStateIntervalId = null
+    if (presenceSignalIntervalId !== null) {
+      window.clearInterval(presenceSignalIntervalId)
+      presenceSignalIntervalId = null
     }
 
     eventClient.close()
@@ -155,9 +155,10 @@ async function startPersonDetection(
 
     const presence = new PersonPresence()
 
-    presenceStateIntervalId = window.setInterval(() => {
-      eventClient.sendPresenceState(presence.getState())
-    }, PRESENCE_STATE_INTERVAL_MS)
+    presenceSignalIntervalId = window.setInterval(() => {
+      const stableState = presence.getState()
+      eventClient.sendPresenceEvent(stableState === 'PRESENT' ? 'PERSON_ENTER' : 'PERSON_LEAVE')
+    }, PRESENCE_SIGNAL_INTERVAL_MS)
 
     const detectFrame = () => {
       if (stopped) return
@@ -175,7 +176,6 @@ async function startPersonDetection(
         if (result.event) {
           console.log(result.event)
           onPresenceEvent(result.event)
-          eventClient.sendPresenceEvent(result.event)
         }
       }
 
