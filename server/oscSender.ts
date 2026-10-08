@@ -1,10 +1,17 @@
 import { createRequire } from 'node:module'
 
 export type PresenceEvent = 'PERSON_ENTER' | 'PERSON_LEAVE'
+export type PresenceState = 'ABSENT' | 'PRESENT'
 
 export interface StationPresenceEvent {
   stationId: string
   type: PresenceEvent
+}
+
+export interface StationPresenceState {
+  stationId: string
+  type: 'PERSON_PRESENCE'
+  state: PresenceState
 }
 
 interface OscMessage {
@@ -44,8 +51,12 @@ const EVENT_ADDRESS_SUFFIXES: Record<PresenceEvent, string> = {
   PERSON_LEAVE: 'leave',
 }
 
-function createPresenceAddress(event: StationPresenceEvent): string {
+function createPresenceEventAddress(event: StationPresenceEvent): string {
   return `/station/${event.stationId}/person/${EVENT_ADDRESS_SUFFIXES[event.type]}`
+}
+
+function createPresenceStateAddress(state: StationPresenceState): string {
+  return `/station/${state.stationId}/person/presence`
 }
 
 function getOscTarget(): OscTarget {
@@ -83,9 +94,17 @@ export class OscSender {
   }
 
   sendPresenceEvent(event: StationPresenceEvent) {
-    const address = createPresenceAddress(event)
+    const address = createPresenceEventAddress(event)
 
     this.udpPort.send({ address, args: [] })
     console.log(`[OSC] ${address} -> ${this.host}:${this.port}`)
+  }
+
+  sendPresenceState(state: StationPresenceState) {
+    const address = createPresenceStateAddress(state)
+    const value = state.state === 'PRESENT' ? 1 : 0
+
+    this.udpPort.send({ address, args: [{ type: 'i', value }] })
+    console.log(`[OSC] ${address} ${value} -> ${this.host}:${this.port}`)
   }
 }

@@ -5,6 +5,9 @@ import { PersonPresence, type PresenceEvent } from './personPresence'
 import { getStationId, getVideoFilename, saveStationId, saveVideoFilename } from './stationConfig'
 
 const availableVideos = ['video01.mp4', 'video02.mp4', 'video03.mp4', 'video04.mp4']
+const PRESENCE_STATE_INTERVAL_MS = 1000
+
+let activePersonDetectionCleanup: (() => void) | null = null
 
 function escapeHtml(value: string) {
   const element = document.createElement('div')
@@ -112,13 +115,53 @@ async function startPersonDetection(
   canvas: HTMLCanvasElement,
   onPresenceEvent: (event: PresenceEvent) => void,
 ) {
+  activePersonDetectionCleanup?.()
+  activePersonDetectionCleanup = null
+
   const eventClient = new EventClient(() => getStationId()!, () => undefined)
+  let animationFrameId: number | null = null
+  let presenceStateIntervalId: number | null = null
+  let stopped = false
+
+  const cleanup = () => {
+    if (stopped) return
+
+    stopped = true
+
+    if (animationFrameId !== null) {
+      window.cancelAnimationFrame(animationFrameId)
+      animationFrameId = null
+    }
+
+    if (presenceStateIntervalId !== null) {
+      window.clearInterval(presenceStateIntervalId)
+      presenceStateIntervalId = null
+    }
+
+    eventClient.close()
+    window.removeEventListener('pagehide', cleanup)
+
+    if (activePersonDetectionCleanup === cleanup) {
+      activePersonDetectionCleanup = null
+    }
+  }
+
+  activePersonDetectionCleanup = cleanup
+  window.addEventListener('pagehide', cleanup, { once: true })
 
   try {
     const detector = await createPersonDetector()
+    if (stopped) return
+
     const presence = new PersonPresence()
 
+    presenceStateIntervalId = window.setInterval(() => {
+      eventClient.sendPresenceState(presence.getState())
+    }, PRESENCE_STATE_INTERVAL_MS)
+
     const detectFrame = () => {
+      if (stopped) return
+
       resizeOverlay(video, canvas)
 
       if (canvas.width && canvas.height) {
@@ -136,11 +179,12 @@ async function startPersonDetection(
         }
       }
 
-      requestAnimationFrame(detectFrame)
+      animationFrameId = requestAnimationFrame(detectFrame)
     }
 
     detectFrame()
   } catch (error) {
+    cleanup()
     console.error('Could not start person detection:', error)
   }
 }

@@ -1,4 +1,4 @@
-import type { PresenceEvent } from './personPresence'
+import type { PresenceEvent, PresenceState } from './personPresence'
 
 export type BackendConnectionStatus = 'connected' | 'disconnected'
 
@@ -28,12 +28,15 @@ export class EventClient {
   }
 
   sendPresenceEvent(type: PresenceEvent) {
-    if (this.socket?.readyState !== WebSocket.OPEN) {
+    if (!this.send({ stationId: this.getStationId(), type })) {
       console.warn('Backend is disconnected; event was not sent:', type)
-      return
     }
+  }
 
-    this.socket.send(JSON.stringify({ stationId: this.getStationId(), type }))
+  sendPresenceState(state: PresenceState) {
+    if (!this.send({ stationId: this.getStationId(), type: 'PERSON_PRESENCE', state })) {
+      console.warn('Backend is disconnected; presence state was not sent:', state)
+    }
   }
 
   close() {
@@ -42,6 +45,13 @@ export class EventClient {
     this.socket?.close()
     this.socket = null
     this.setStatus('disconnected')
+  }
+
+  private send(message: unknown) {
+    if (this.socket?.readyState !== WebSocket.OPEN) return false
+
+    this.socket.send(JSON.stringify(message))
+    return true
   }
 
   private connect() {
