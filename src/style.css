@@ -125,6 +125,14 @@ button:disabled {
   user-select: none;
 }
 
+#exhibition-video.is-paused {
+  filter: grayscale(1);
+}
+
+#exhibition-video.is-playing {
+  filter: none;
+}
+
 .media-pipe-input {
   position: fixed;
   width: 1px;

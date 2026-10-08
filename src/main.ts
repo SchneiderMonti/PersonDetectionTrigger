@@ -7,6 +7,10 @@ import { getStationId, getVideoFilename, saveStationId, saveVideoFilename } from
 const availableVideos = ['video01.mp4', 'video02.mp4', 'video03.mp4', 'video04.mp4']
 const PRESENCE_SIGNAL_INTERVAL_MS = 1000
 
+type SafariFullscreenVideoElement = HTMLVideoElement & {
+  webkitEnterFullscreen?: () => void
+}
+
 let activePersonDetectionCleanup: (() => void) | null = null
 
 function escapeHtml(value: string) {
@@ -217,6 +221,32 @@ function requestBrowserFullscreen() {
   }
 }
 
+function enterNativeVideoFullscreenOrFallback(video: HTMLVideoElement) {
+  const safariVideo = video as SafariFullscreenVideoElement
+
+  video.muted = true
+  video.controls = false
+  video.removeAttribute('controls')
+
+  if (typeof safariVideo.webkitEnterFullscreen !== 'function') {
+    console.warn('Native Safari video fullscreen is not supported; falling back to browser fullscreen.')
+    requestBrowserFullscreen()
+    return
+  }
+
+  try {
+    safariVideo.webkitEnterFullscreen()
+  } catch (error) {
+    console.warn('Native Safari video fullscreen request failed; falling back to browser fullscreen:', error)
+    requestBrowserFullscreen()
+  }
+}
+
+function syncPlaybackAppearance(video: HTMLVideoElement) {
+  video.classList.toggle('is-playing', !video.paused)
+  video.classList.toggle('is-paused', video.paused)
+}
+
 async function enterExhibitionMode(stationId: string, videoFilename: string) {
   saveStationId(stationId)
   saveVideoFilename(videoFilename)
@@ -227,6 +257,11 @@ async function enterExhibitionMode(stationId: string, videoFilename: string) {
   const exhibitionVideo = document.querySelector<HTMLVideoElement>('#exhibition-video')!
 
   exhibitionVideo.pause()
+  syncPlaybackAppearance(exhibitionVideo)
+  exhibitionVideo.addEventListener('play', () => syncPlaybackAppearance(exhibitionVideo))
+  exhibitionVideo.addEventListener('pause', () => syncPlaybackAppearance(exhibitionVideo))
+  exhibitionVideo.addEventListener('ended', () => syncPlaybackAppearance(exhibitionVideo))
+  enterNativeVideoFullscreenOrFallback(exhibitionVideo)
   await preloadVideo(exhibitionVideo)
   await startWebcam(webcamVideo)
   await startPersonDetection(webcamVideo, canvas, (event) => {
@@ -255,9 +290,6 @@ function bootstrap() {
 
   stationInput.addEventListener('input', updateStartButton)
   videoSelect.addEventListener('change', updateStartButton)
-  startButton.addEventListener('click', () => {
-    requestBrowserFullscreen()
-  })
   updateStartButton()
 
   form.addEventListener('submit', async (event) => {
