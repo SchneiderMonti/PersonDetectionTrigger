@@ -120,17 +120,19 @@ button:disabled {
   height: 100dvh;
   object-fit: cover;
   background: #000;
+  filter: grayscale(100%);
+  transition: filter 600ms ease;
   touch-action: none;
   -webkit-user-select: none;
   user-select: none;
 }
 
-#exhibition-video.is-paused {
-  filter: grayscale(1);
+#exhibition-video.is-absent {
+  filter: grayscale(100%);
 }
 
-#exhibition-video.is-playing {
-  filter: none;
+#exhibition-video.is-present {
+  filter: grayscale(0%);
 }
 
 .media-pipe-input {

@@ -242,9 +242,10 @@ function enterNativeVideoFullscreenOrFallback(video: HTMLVideoElement) {
   }
 }
 
-function syncPlaybackAppearance(video: HTMLVideoElement) {
-  video.classList.toggle('is-playing', !video.paused)
-  video.classList.toggle('is-paused', video.paused)
+function syncPresenceAppearance(video: HTMLVideoElement, event: PresenceEvent) {
+  const isPresent = event === 'PERSON_ENTER'
+  video.classList.toggle('is-present', isPresent)
+  video.classList.toggle('is-absent', !isPresent)
 }
 
 async function enterExhibitionMode(stationId: string, videoFilename: string) {
@@ -256,22 +257,15 @@ async function enterExhibitionMode(stationId: string, videoFilename: string) {
   const canvas = document.querySelector<HTMLCanvasElement>('#overlay')!
   const exhibitionVideo = document.querySelector<HTMLVideoElement>('#exhibition-video')!
 
-  exhibitionVideo.pause()
-  syncPlaybackAppearance(exhibitionVideo)
-  exhibitionVideo.addEventListener('play', () => syncPlaybackAppearance(exhibitionVideo))
-  exhibitionVideo.addEventListener('pause', () => syncPlaybackAppearance(exhibitionVideo))
-  exhibitionVideo.addEventListener('ended', () => syncPlaybackAppearance(exhibitionVideo))
+  syncPresenceAppearance(exhibitionVideo, 'PERSON_LEAVE')
   enterNativeVideoFullscreenOrFallback(exhibitionVideo)
   await preloadVideo(exhibitionVideo)
+  void exhibitionVideo.play().catch((error) => {
+    console.warn('Exhibition video playback failed:', error)
+  })
   await startWebcam(webcamVideo)
   await startPersonDetection(webcamVideo, canvas, (event) => {
-    if (event === 'PERSON_ENTER') {
-      void exhibitionVideo.play().catch((error) => {
-        console.warn('Exhibition video playback failed:', error)
-      })
-    } else if (event === 'PERSON_LEAVE') {
-      exhibitionVideo.pause()
-    }
+    syncPresenceAppearance(exhibitionVideo, event)
   })
 }
 
