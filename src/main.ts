@@ -50,7 +50,7 @@ function renderSetup() {
 function renderExhibition(videoFilename: string) {
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
     <main class="exhibition-screen">
-      <video id="exhibition-video" src="/videos/${escapeHtml(videoFilename)}" playsinline preload="auto" muted></video>
+      <video id="exhibition-video" src="/videos/${escapeHtml(videoFilename)}" playsinline preload="auto" muted loop></video>
       <video id="webcam" class="media-pipe-input" autoplay playsinline muted></video>
       <canvas id="overlay" class="media-pipe-input" aria-hidden="true"></canvas>
     </main>
@@ -231,11 +231,9 @@ async function enterExhibitionMode(stationId: string, videoFilename: string) {
   await startWebcam(webcamVideo)
   await startPersonDetection(webcamVideo, canvas, (event) => {
     if (event === 'PERSON_ENTER') {
-      if (!exhibitionVideo.ended) {
-        void exhibitionVideo.play().catch((error) => {
-          console.warn('Exhibition video playback failed:', error)
-        })
-      }
+      void exhibitionVideo.play().catch((error) => {
+        console.warn('Exhibition video playback failed:', error)
+      })
     } else if (event === 'PERSON_LEAVE') {
       exhibitionVideo.pause()
     }
