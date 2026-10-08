@@ -1,10 +1,10 @@
 import './style.css'
 import { EventClient } from './eventClient'
 import { createPersonDetector, detectPeople, type PersonDetection } from './personDetector'
-import { PersonPresence } from './personPresence'
-import { getStationId, saveStationId } from './stationConfig'
+import { PersonPresence, type PresenceEvent } from './personPresence'
+import { getStationId, getVideoFilename, saveStationId, saveVideoFilename } from './stationConfig'
 
-const initialStatus = 'Kamera wird gestartet...'
+const availableVideos = ['video01.mp4', 'video02.mp4', 'video03.mp4', 'video04.mp4']
 
 function escapeHtml(value: string) {
   const element = document.createElement('div')
@@ -12,71 +12,49 @@ function escapeHtml(value: string) {
   return element.innerHTML
 }
 
-function renderApp(stationId: string) {
+function renderSetup() {
+  const savedStationId = getStationId() ?? ''
+  const savedVideoFilename = getVideoFilename() ?? ''
+  const videoOptions = availableVideos
+    .map(
+      (filename) =>
+        `<option value="${escapeHtml(filename)}"${filename === savedVideoFilename ? ' selected' : ''}>${escapeHtml(filename)}</option>`,
+    )
+    .join('')
+
   document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
-    <main class="app-shell">
-      <h1>MediaPipe Person Detection</h1>
-      <p id="status" class="status">${initialStatus}</p>
-      <section class="presence-panel" aria-label="Person presence status">
-        <p>Station: <strong id="station-id">${escapeHtml(stationId)}</strong> <button id="change-station" type="button">Station ändern</button></p>
-        <p>Raw detection: <strong id="raw-detection">not detected</strong></p>
-        <p>Stable presence state: <strong id="presence-state">ABSENT</strong></p>
-        <p>Last event: <strong id="last-event">none</strong></p>
-        <p>Backend: <strong id="backend-status">disconnected</strong></p>
-      </section>
-      <div class="video-stage">
-        <video id="webcam" autoplay playsinline></video>
-        <canvas id="overlay" aria-hidden="true"></canvas>
-      </div>
+    <main class="setup-screen">
+      <form id="setup-form" class="setup-form">
+        <h1>Setup</h1>
+        <label>
+          Station:
+          <input id="station-input" type="text" placeholder="Ipad1" value="${escapeHtml(savedStationId)}" autocomplete="off" />
+        </label>
+        <label>
+          Video:
+          <select id="video-select">
+            <option value="">Bitte auswählen</option>
+            ${videoOptions}
+          </select>
+        </label>
+        <button id="start-button" type="submit" disabled>Start</button>
+        <p id="setup-error" class="setup-error" aria-live="polite"></p>
+      </form>
     </main>
   `
 }
 
-function showStationSetupDialog(currentStationId = ''): Promise<string> {
-  return new Promise((resolve) => {
-    const overlay = document.createElement('div')
-    overlay.className = 'station-setup-overlay'
-    overlay.innerHTML = `
-      <form class="station-setup-dialog">
-        <h2>Station einrichten</h2>
-        <label>
-          Station ID
-          <input id="station-input" type="text" placeholder="Station1" value="${escapeHtml(currentStationId)}" autocomplete="off" />
-        </label>
-        <p id="station-error" class="station-error" aria-live="polite"></p>
-        <button type="submit">Speichern</button>
-      </form>
-    `
-
-    document.body.appendChild(overlay)
-
-    const form = overlay.querySelector<HTMLFormElement>('form')!
-    const input = overlay.querySelector<HTMLInputElement>('#station-input')!
-    const error = overlay.querySelector<HTMLElement>('#station-error')!
-
-    input.focus()
-    input.select()
-
-    form.addEventListener('submit', (event) => {
-      event.preventDefault()
-
-      const stationId = input.value.trim()
-      if (!stationId) {
-        error.textContent = 'Bitte eine Station ID eingeben.'
-        input.focus()
-        return
-      }
-
-      const savedStationId = saveStationId(stationId)
-      overlay.remove()
-      resolve(savedStationId)
-    })
-  })
+function renderExhibition(videoFilename: string) {
+  document.querySelector<HTMLDivElement>('#app')!.innerHTML = `
+    <main class="exhibition-screen">
+      <video id="exhibition-video" src="/videos/${escapeHtml(videoFilename)}" playsinline preload="auto" muted></video>
+      <video id="webcam" class="media-pipe-input" autoplay playsinline muted></video>
+      <canvas id="overlay" class="media-pipe-input" aria-hidden="true"></canvas>
+    </main>
+  `
 }
 
-async function startWebcam(video: HTMLVideoElement, status: HTMLElement) {
-  status.textContent = initialStatus
-
+async function startWebcam(video: HTMLVideoElement) {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({
       video: true,
@@ -87,7 +65,6 @@ async function startWebcam(video: HTMLVideoElement, status: HTMLElement) {
     await video.play()
   } catch (error) {
     console.error('Webcam access failed:', error)
-    status.textContent = 'Kamera konnte nicht gestartet werden'
     throw error
   }
 }
@@ -133,21 +110,13 @@ function drawDetections(canvas: HTMLCanvasElement, detections: PersonDetection[]
 async function startPersonDetection(
   video: HTMLVideoElement,
   canvas: HTMLCanvasElement,
-  status: HTMLElement,
-  rawDetection: HTMLElement,
-  presenceState: HTMLElement,
-  lastEvent: HTMLElement,
-  backendStatus: HTMLElement,
+  onPresenceEvent: (event: PresenceEvent) => void,
 ) {
-  const eventClient = new EventClient(() => getStationId()!, (status) => {
-    backendStatus.textContent = status
-  })
+  const eventClient = new EventClient(() => getStationId()!, () => undefined)
 
   try {
-    status.textContent = 'Personenerkennung wird geladen...'
     const detector = await createPersonDetector()
     const presence = new PersonPresence()
-    status.textContent = 'Personenerkennung läuft'
 
     const detectFrame = () => {
       resizeOverlay(video, canvas)
@@ -159,12 +128,10 @@ async function startPersonDetection(
         const result = presence.update(personDetected, timestamp)
 
         drawDetections(canvas, people)
-        rawDetection.textContent = personDetected ? 'detected' : 'not detected'
-        presenceState.textContent = result.state
 
         if (result.event) {
           console.log(result.event)
-          lastEvent.textContent = result.event
+          onPresenceEvent(result.event)
           eventClient.sendPresenceEvent(result.event)
         }
       }
@@ -175,40 +142,101 @@ async function startPersonDetection(
     detectFrame()
   } catch (error) {
     console.error('Could not start person detection:', error)
-    status.textContent = 'Personenerkennung konnte nicht gestartet werden'
   }
 }
 
-async function bootstrap() {
-  let stationId = getStationId()
+function preloadVideo(video: HTMLVideoElement) {
+  return new Promise<void>((resolve) => {
+    if (video.readyState >= HTMLMediaElement.HAVE_METADATA) {
+      resolve()
+      return
+    }
 
-  if (!stationId) {
-    stationId = await showStationSetupDialog()
-  }
-
-  renderApp(stationId)
-
-  const video = document.querySelector<HTMLVideoElement>('#webcam')!
-  const canvas = document.querySelector<HTMLCanvasElement>('#overlay')!
-  const status = document.querySelector<HTMLElement>('#status')!
-  const rawDetection = document.querySelector<HTMLElement>('#raw-detection')!
-  const presenceState = document.querySelector<HTMLElement>('#presence-state')!
-  const lastEvent = document.querySelector<HTMLElement>('#last-event')!
-  const backendStatus = document.querySelector<HTMLElement>('#backend-status')!
-  const stationIdElement = document.querySelector<HTMLElement>('#station-id')!
-  const changeStationButton = document.querySelector<HTMLButtonElement>('#change-station')!
-
-  changeStationButton.addEventListener('click', async () => {
-    const newStationId = await showStationSetupDialog(getStationId() ?? '')
-    stationIdElement.textContent = newStationId
+    video.addEventListener('loadedmetadata', () => resolve(), { once: true })
+    video.addEventListener('error', () => resolve(), { once: true })
+    video.load()
   })
+}
+
+function requestBrowserFullscreen() {
+  if (typeof document.documentElement.requestFullscreen !== 'function') {
+    console.warn('Browser fullscreen is not supported; continuing to start the exhibition normally.')
+    return
+  }
 
   try {
-    await startWebcam(video, status)
-    await startPersonDetection(video, canvas, status, rawDetection, presenceState, lastEvent, backendStatus)
-  } catch {
-    // Error details are logged where they occur.
+    void document.documentElement.requestFullscreen().catch((error) => {
+      console.warn('Browser fullscreen request was rejected; continuing to start the exhibition normally:', error)
+    })
+  } catch (error) {
+    console.warn('Browser fullscreen request failed; continuing to start the exhibition normally:', error)
   }
+}
+
+async function enterExhibitionMode(stationId: string, videoFilename: string) {
+  saveStationId(stationId)
+  saveVideoFilename(videoFilename)
+  renderExhibition(videoFilename)
+
+  const webcamVideo = document.querySelector<HTMLVideoElement>('#webcam')!
+  const canvas = document.querySelector<HTMLCanvasElement>('#overlay')!
+  const exhibitionVideo = document.querySelector<HTMLVideoElement>('#exhibition-video')!
+
+  exhibitionVideo.pause()
+  await preloadVideo(exhibitionVideo)
+  await startWebcam(webcamVideo)
+  await startPersonDetection(webcamVideo, canvas, (event) => {
+    if (event === 'PERSON_ENTER') {
+      if (!exhibitionVideo.ended) {
+        void exhibitionVideo.play().catch((error) => {
+          console.warn('Exhibition video playback failed:', error)
+        })
+      }
+    } else if (event === 'PERSON_LEAVE') {
+      exhibitionVideo.pause()
+    }
+  })
+}
+
+function bootstrap() {
+  renderSetup()
+
+  const form = document.querySelector<HTMLFormElement>('#setup-form')!
+  const stationInput = document.querySelector<HTMLInputElement>('#station-input')!
+  const videoSelect = document.querySelector<HTMLSelectElement>('#video-select')!
+  const startButton = document.querySelector<HTMLButtonElement>('#start-button')!
+  const setupError = document.querySelector<HTMLElement>('#setup-error')!
+
+  const updateStartButton = () => {
+    startButton.disabled = !stationInput.value.trim() || !videoSelect.value
+  }
+
+  stationInput.addEventListener('input', updateStartButton)
+  videoSelect.addEventListener('change', updateStartButton)
+  startButton.addEventListener('click', () => {
+    requestBrowserFullscreen()
+  })
+  updateStartButton()
+
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault()
+
+    const stationId = stationInput.value.trim()
+    const videoFilename = videoSelect.value
+
+    if (!stationId || !videoFilename) return
+
+    startButton.disabled = true
+    setupError.textContent = ''
+
+    try {
+      await enterExhibitionMode(stationId, videoFilename)
+    } catch (error) {
+      console.error('Could not enter exhibition mode:', error)
+      renderSetup()
+      bootstrap()
+    }
+  })
 }
 
 bootstrap()

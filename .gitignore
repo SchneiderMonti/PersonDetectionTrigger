@@ -22,3 +22,6 @@ certs/
 # Editor
 .vscode/
 .idea/
+
+public/videos/*.mp4
+public/videos/*.MP4

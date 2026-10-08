@@ -1,4 +1,5 @@
 const STATION_STORAGE_KEY = 'mediapipe.stationId'
+const VIDEO_STORAGE_KEY = 'mediapipe.videoFilename'
 
 export function getStationId(): string | null {
   const stationId = window.localStorage.getItem(STATION_STORAGE_KEY)?.trim()
@@ -16,4 +17,20 @@ export function saveStationId(stationId: string): string {
   return normalizedStationId
 }
 
-export { STATION_STORAGE_KEY }
+export function getVideoFilename(): string | null {
+  const videoFilename = window.localStorage.getItem(VIDEO_STORAGE_KEY)?.trim()
+  return videoFilename ? videoFilename : null
+}
+
+export function saveVideoFilename(videoFilename: string): string {
+  const normalizedVideoFilename = videoFilename.trim()
+
+  if (!normalizedVideoFilename) {
+    throw new Error('Video filename must not be empty')
+  }
+
+  window.localStorage.setItem(VIDEO_STORAGE_KEY, normalizedVideoFilename)
+  return normalizedVideoFilename
+}
+
+export { STATION_STORAGE_KEY, VIDEO_STORAGE_KEY }
