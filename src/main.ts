@@ -6,6 +6,7 @@ import { getStationId, getVideoFilename, saveStationId, saveVideoFilename } from
 
 const availableVideos = ['video01.mp4', 'video02.mp4', 'video03.mp4', 'video04.mp4']
 const PRESENCE_SIGNAL_INTERVAL_MS = 1000
+const MIN_PERSON_HEIGHT_RATIO = 0.30
 
 type SafariFullscreenVideoElement = HTMLVideoElement & {
   webkitEnterFullscreen?: () => void
@@ -83,6 +84,21 @@ function resizeOverlay(video: HTMLVideoElement, canvas: HTMLCanvasElement) {
     canvas.width = video.videoWidth
     canvas.height = video.videoHeight
   }
+}
+
+function getValidPresencePeople(detections: PersonDetection[], frameHeight: number) {
+  return detections.filter((detection, index) => {
+    const heightRatio = frameHeight > 0 && detection.boundingBox
+      ? detection.boundingBox.height / frameHeight
+      : 0
+
+    console.debug(
+      `[PersonDetection] person ${index + 1} bounding-box height ratio: ${heightRatio.toFixed(3)} ` +
+        `(min ${MIN_PERSON_HEIGHT_RATIO.toFixed(2)})`,
+    )
+
+    return heightRatio >= MIN_PERSON_HEIGHT_RATIO
+  })
 }
 
 function drawDetections(canvas: HTMLCanvasElement, detections: PersonDetection[]) {
@@ -172,7 +188,8 @@ async function startPersonDetection(
       if (canvas.width && canvas.height) {
         const timestamp = performance.now()
         const people = detectPeople(detector, video, timestamp)
-        const personDetected = people.length > 0
+        const validPresencePeople = getValidPresencePeople(people, video.videoHeight)
+        const personDetected = validPresencePeople.length > 0
         const result = presence.update(personDetected, timestamp)
 
         drawDetections(canvas, people)
